@@ -1,10 +1,9 @@
-
-
-  <?php
+<?php
 /*
-Plugin Name: Reliability Student Export
+Plugin Name: Reliability
 Description: A simple plugin that allows to export students progress
 Author: Michael Suarez
+Version: 0.1
 */
 register_activation_hook(__FILE__, 'crudOperationsTable');
 
@@ -29,7 +28,7 @@ function crudOperationsTable() {
 add_action('admin_menu', 'addAdminPageContent');
 
 function addAdminPageContent() {
-  add_menu_page('Reliability Trial', 'Reliability', 'manage_options' ,__FILE__, 'crudAdminPage', 'dashicons-wordpress');
+  add_menu_page('Reliability', 'Reliability', 'manage_options' ,__FILE__, 'crudAdminPage', 'dashicons-wordpress');
 }
 
 function list_csv_files($directory) {
@@ -39,7 +38,8 @@ function list_csv_files($directory) {
     while (false !== ($file = readdir($handle))) {
       if ($file != "." && $file != ".." && preg_match('/\.csv$/', $file)) {
         if (is_file($directory.'/'.$file)) {
-          $files[] = '<td><a href="'.plugin_dir_url( __FILE__ ).$file.'">'.$file.'</a></td> <td><form method="post" action=""><input type="hidden" name="delete_file" value="/'.$directory.'/'.$file.'"><button type="submit">Delete</button></form></td>';
+          $exportDate = substr($file, strpos($file, "_") +1);
+          $files[] = '<td><a href="'.plugin_dir_url( __FILE__ ).$file.'">'.$file.'</a></td> <td>'.date('m/d/Y',substr($exportDate,0,-4)).'</td> <td><form method="post" action=""><input type="hidden" name="delete_file" value="/'.$directory.'/'.$file.'"><button type="submit">Delete</button></form></td>';
         }
       }
     }
@@ -56,35 +56,13 @@ function crudAdminPage() {
   $local_time  = current_datetime();
     $current_time = $local_time->getTimestamp() + $local_time->getOffset();
 
-
   $table_name = $wpdb->prefix . 'userstable';
-
-  if (isset($_POST['newsubmit'])) {
-    $name = $_POST['newname'];
-    $email = $_POST['newemail'];
-    $wpdb->query("INSERT INTO $table_name(name,email) VALUES('$name','$email')");
-    echo "<script>location.replace('admin.php?page=crud.php');</script>";
-  }
-
-  if (isset($_POST['uptsubmit'])) {
-    $id = $_POST['uptid'];
-    $name = $_POST['uptname'];
-    $email = $_POST['uptemail'];
-    $wpdb->query("UPDATE $table_name SET name='$name',email='$email' WHERE user_id='$id'");
-    echo "<script>location.replace('admin.php?page=crud.php');</script>";
-  }
-
-  if (isset($_GET['del'])) {
-    $del_id = $_GET['del'];
-    $wpdb->query("DELETE FROM $table_name WHERE user_id='$del_id'");
-    echo "<script>location.replace('admin.php?page=crud.php');</script>";
-  }
 
   if (isset($_POST['delete_file'])) {
     $file_path = $_POST['delete_file'];
-    /*if (is_file($file_path)) {
+    if (is_file($file_path)) {
       unlink($file_path);
-    }*/
+    }
     echo "<script>alert('Delete - ". $file_path."');</script>";
   }
 
@@ -102,12 +80,7 @@ function crudAdminPage() {
     ob_end_clean();
 
 
-   // $fp = fopen('php://output', 'w');
-
-    // for saving file path
-    $plugin_dir = trailingslashit( dirname( __FILE__ ));
-    $logfile = $plugin_dir . 'students_'.$current_time.'.csv';
-    $fp = fopen($logfile, 'w');
+    $fp = fopen('php://output', 'w');
 
     // Headers for the CSV file
 
@@ -259,63 +232,127 @@ function crudAdminPage() {
   } // End of function
 
 
-  // for testing purposes, delete when in production
-  //$steps_completed = learndash_course_get_completed_steps( '318',  '13' );
-  //$steps_total = learndash_course_get_steps_count( '32393' );
-  //$next_step = learndash_user_progress_get_next_incomplete_step( int $user_id,  int $course_id,  int $step_id );
+  // check user capabilities
+  if ( ! current_user_can( 'manage_options' ) ) {
+    return;
+  }
 
-  //echo "Steps Total:" . $steps_total . '<br />'; 
-  //echo "Steps Completed:" . $steps_completed . '<br />';
-  //$far_step[] = learndash_activity_course_get_latest_completed_step( '387', '32393' );
-  //$course_farthest_step_title = $far_step[0]['post_id'];
-  //echo "Farthest Step: ". $course_farthest_step_title;
-  //$str_last_login = learndash_adjust_date_time_display( get_user_meta( intval( $Record['ID'] ), 'learndash-last-login', true ), 'Y-m-d' );
-  //echo "last login:" . get_user_meta('318', '_ld_notifications_last_login') . '<br />';
-  //print_r(learndash_activity_course_get_latest_completed_step( '387', '32393' ));
+  //Get the active tab from the $_GET param
+  $default_tab = null;
+  $tab = isset($_GET['tab']) ? $_GET['tab'] : $default_tab;
 
- //print_r(learndash_report_get_activity_by_user_id( '387' ));
-
- //$last_login_arr = get_user_meta('318', '_ld_notifications_last_login', true);
- //$activity_query_args = array(
-  //'user_id' => '387'
- //);
-
- //echo "last login:" . date('m/d/Y', $last_login_arr). '<br />';
-  
-
-  //print_r(learndash_report_course_users_progress('32393',  $activity_query_args,  ));
-  //print_r( list_files( __DIR__,2, '.php' ) );
-  //$upload_dir = wp_upload_dir();
-  //$folder = $upload_dir['basedir'];
-
-  
-  
 
   ?>
+
+
+
   <div class="wrap">
-    <hr />
     <h2>Reliability Export</h2>
-   
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <!-- Here are our tabs -->
+    <nav class="nav-tab-wrapper">
+      <a href="?page=reliability/reliability.php" class="nav-tab <?php if($tab===null):?>nav-tab-active<?php endif; ?>">Students</a>
+      <a href="?page=reliability/reliability.php&tab=assignments" class="nav-tab <?php if($tab==='assignments'):?>nav-tab-active<?php endif; ?>">Assignments</a>
+      <!-- <a href="?page=my-plugin&tab=tools" class="nav-tab <?php if($tab==='tools'):?>nav-tab-active<?php endif; ?>">Tools</a> -->
+    </nav>
+
+    <div class="tab-content">
+    <?php switch($tab) :
+      case 'assignments':
+         include 'assignments.php'; 
+         //Put your HTML here
+        break;
+      default:
+    ?>
+    <br />
       <form action="" method="post">
           <button id="btnexport" name="btnexport" type="submit" class="button">Export Student's Data</button>
-          <button id="btncron" name="btncron" type="submit" class="button">Run Cron now</button>
       </form>
+
+      <?php 
+
+        // List the csv files created 
+        $directory = __DIR__;
+        $files = list_csv_files($directory);
+        echo '<h4>Scheduled Exports</h4>';
+        echo '<table class="wp-list-table widefat striped table-view-list crontrol-events" style="max-width: 95%;">';
+        echo '<thead><tr><th>Filename</th><th>Date exported</th><th>Action</th></tr></thead>';
+        foreach ($files as $file) {
+          echo '<tr>'.$file.'</tr>';
+        }
+        echo '</table>';
+
+      ?>
+
+
+    <?php
+        break;
+    endswitch; ?>
+    </div>
+
+   
   
   </div>
 
   
+
+  
   <?php
 
-  // List the csv files created 
-  $directory = __DIR__;
-  $files = list_csv_files($directory);
-  echo '<h4>Scheduled Exports</h4>';
-  echo '<table class="wp-list-table widefat striped table-view-list crontrol-events">';
-  echo '<thead><tr><th>Filename</th><th>Action</th></tr></thead>';
-  foreach ($files as $file) {
-    echo '<tr>'.$file.'</tr>';
-  }
-  echo '</table>';
+}
+
+
+function list_my_courses() {
 
 }
+
+function list_my_modules() {
+  if(isset($_REQUEST)) {
+
+  $course_id = $_REQUEST['course_id'];
+
+  $module_array = array();
+  $modules = learndash_course_get_lessons( $course_id );
+
+  foreach($modules as $modules_title) {
+    //$course_name[] = get_post($ld_course_id);
+
+    echo "<option value='$modules_title->ID'>$modules_title->post_title</option>";
+     //$modules_array[] = $modules_title->post_name;
+    //echo "<options>$modules_title->post_name</options>";
+  }
+  //$my_post = $_REQUEST;
+  // var_dump($modules_array);
+  //echo $_REQUEST['course_id'];
+  // echo json_encode($modules_array);
+  }
+
+}
+
+add_action("wp_ajax_list_modules", 'list_my_modules');
+
+function list_my_lessons() {
+  if(isset($_REQUEST)) {
+
+    $course_id = $_REQUEST['course_id'];
+    $lesson_id = $_REQUEST['lesson_id'];
+
+    $lessons_array = array();
+    $lessons = learndash_course_get_topics($course_id, $lesson_id);
+
+    foreach($lessons as $lessons_title) {
+
+      //$lessons_array[] = $lessons_title->post_title;
+      echo "<option value='$lessons_title->ID'>$lessons_title->post_title</option>";
+
+    }
+
+    var_dump($lessons_array);
+
+  }
+}
+
+add_action('wp_ajax_list_lessons', 'list_my_lessons');
 
