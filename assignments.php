@@ -1,9 +1,12 @@
 <?php
+
+// Get all the list of groups or teams
 $groups = learndash_get_groups();
-//print_r($groups);
+
 usort($groups, function($grp_name_a, $grp_name_b){
         return $grp_name_a->post_name <=> $grp_name_b->post_name;
 });
+
 $grp_name = array();
 /*foreach($groups as $ld_group_name) {
      $grp_name[] = $ld_group_name->post_name;
@@ -11,7 +14,10 @@ $grp_name = array();
 
 
 //$courses = learndash_get_all_courses_with_groups();
-$courses = learndash_user_get_enrolled_courses( get_current_user_id());
+//$courses = learndash_get_group_courses_list('34688');
+
+//$courses = learndash_user_get_enrolled_courses( get_current_user_id());
+//print_r($courses);
 $course_name = array();
 foreach($courses as $ld_course_id) {
     $course_name[] = get_post($ld_course_id);
@@ -32,11 +38,21 @@ $ajax_course_id = $_POST['course_id'];
 
 
 //print_r($course_name);
+
+
+// get all assignments
+//$assignments = array('apple', 'oranges', 'grapes');
+$my_assignments = array();
+$my_assignments = learndash_get_user_assignments('19','591');
+//$assignments = learndash_get_course_assignments();
+
+//echo "what the" . $my_assignments;
+//print_r($my_assignments);
 ?>
 
 <h1>Assignments</h1>
 <div>
-    <label><b>Team:</b></label><select class="sel-teams" name="team">
+    <label><b>Team:</b></label><select class="sel-teams" name="teams" id="teams">
     <?php foreach($groups as $ld_group_name) { ?>
     <option value="<?php echo $ld_group_name->ID; ?>"><?php echo $ld_group_name->post_name; ?></option>
 
@@ -45,10 +61,6 @@ $ajax_course_id = $_POST['course_id'];
 
     <label><b>Courses:</b></label>
     <select class="sel-courses" name="courses" id="courses">
-    <?php foreach($course_name as $cvalue) { ?>
-    <option value="<?php echo $cvalue->ID; ?>"><?php echo $cvalue->post_title; ?></option>
-
-    <?php } ?>
     </select>
 
     <label><b>Modules:</b></label><select class="sel-modules" name="modules" id="modules" style="min-width: 200px;">
@@ -83,7 +95,6 @@ $ajax_course_id = $_POST['course_id'];
         dropdownAutoWidth: true
       });
 
-
       jQuery('.sel-lessons').select2({
         placeholder: 'Lessons',
         width: '20%',
@@ -92,6 +103,33 @@ $ajax_course_id = $_POST['course_id'];
 
      console.log('document ready');
     });
+
+
+    jQuery('#teams').change(function(){
+      var team_id = jQuery(this).val();
+
+      jQuery.ajax({
+        data: {
+          'team_id': team_id,
+          'action': 'list_courses'
+        },
+        url: '../wp-admin/admin-ajax.php',
+        success: function(data){
+          jQuery('#courses').html(data);
+          console.log('success');
+          console.log('Team ID:' + team_id);
+          if (!jQuery.trim(data)){   
+              //alert("What follows is blank: " + data);
+          }
+          else{   
+              //alert("What follows is not blank: " + data);
+              jQuery("#courses").prop("selectedIndex", 0);
+          }
+          
+        }
+      });
+
+    }); 
 
     jQuery('#courses').change(function(){
       var course_id = jQuery(this).val();
@@ -140,7 +178,7 @@ $ajax_course_id = $_POST['course_id'];
           
           jQuery('#lessons').html(data);
           console.log('success');
-          console.log('Courses ID:' + lesson_id);
+          console.log('Lesson ID:' + lesson_id);
           
         }
       });

@@ -54,7 +54,7 @@ function crudAdminPage() {
   global $wpdb;
 
   $local_time  = current_datetime();
-    $current_time = $local_time->getTimestamp() + $local_time->getOffset();
+  $current_time = $local_time->getTimestamp() + $local_time->getOffset();
 
   $table_name = $wpdb->prefix . 'userstable';
 
@@ -185,7 +185,7 @@ function crudAdminPage() {
               }
             
             }
-          } // end for each
+          } // end if
 
 
           $str = "to be fix";
@@ -229,7 +229,302 @@ function crudAdminPage() {
    
     fclose( $fp );
     exit;
-  } // End of function
+  } // End if 
+
+  if (isset($_POST['btnexportnow'])) {
+
+    // include the headers for the csv format file
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="students.csv"');
+
+    // clean output buffer
+    ob_end_clean();
+
+
+    $fp = fopen('php://output', 'w');
+ 
+     // Headers for the CSV file
+ 
+    $header_row = array(
+       0 => 'user_id',
+       1 => 'name',
+       2 => 'email',
+       3 => 'course_id',
+       4 => 'course_title', 
+       5 => 'steps_completed',
+       6 => 'steps_total', 
+       7 => 'course_completed',
+       8 => 'course_completed_on',
+       9 => 'course_started_on',
+       10 => 'course_total_time_on',
+       11 => 'course_last_step_id',
+       12 => 'course_last_step_type',
+       13 => 'course_last_step_title',
+       14 => 'course_farthest_step_title',
+       15 => 'last_login_date' );
+     
+    fputcsv($fp, $header_row); 
+    
+
+    // get all courses 
+    //learndash_get_course_users_access_from_meta( int $course_id )
+    $allCourses = array();
+    $allCourses = learndash_get_all_course_ids();
+  
+    //echo "students enrolled:" . learndash_students_enrolled_count();
+   // print_r($allCourses);
+  
+
+    // Get all users 
+    $allUsers = get_users( array( 'fields' => array( 'id', 'display_name', 'user_email' ) ) );
+    //print_r($allUsers);
+
+    // Get courses enrolled by 
+    //$enr_courses = learndash_user_get_enrolled_courses('137');
+    //print_r($enr_courses);
+
+    //echo "<table border='1' cellpadding=0 cellspacing=0>";
+    foreach($allUsers as $userValue) {
+
+        $user_id = $userValue->id;
+        $far_step = array();
+
+        //check enrolled courses
+        $enr_courses = learndash_user_get_enrolled_courses($user_id);
+        $stud_progress = learndash_report_user_courses_progress($user_id);
+        $num_courses = count($enr_courses);
+        $last_login = date('m/d/Y', get_user_meta( $user_id, '_ld_notifications_last_login', true));
+
+        $enr_num_course = count($stud_progress['query_args']['post_ids']);
+         //echo "<tr><td>num of course: $enr_num_course</td></tr>";
+        foreach($stud_progress['results'] as $stud_values) {
+          $user_id = $stud_values->user_id;
+          $course_title = $stud_values->post_title;
+          $user_name = $stud_values->user_display_name;
+
+         /* echo "<tr>
+            <td>$user_id</td>
+            <td>$user_name</td>
+            <td>$course_title</td>
+          </tr>";*/
+
+        }
+        $ctr = 0;
+        if($num_courses > 1) {
+          
+          foreach($enr_courses as $enr_value) {
+            $far_step = array();
+            $course_id = $enr_value;
+            $header_output = '';
+            $course_title = get_post($enr_value);
+            $steps_completed = learndash_course_get_completed_steps( $user_id,  $enr_value );
+            $steps_total = learndash_course_get_steps_count( $enr_value);
+            $course_completed = learndash_course_status( $enr_value, $user_id );
+            $course_completed = ($course_completed == 'Completed' ) ? "YES" : "NO";
+            if( $course_completed  == 'YES') {
+              $steps_completed = $steps_total;
+            }
+            $course_completed_on = learndash_user_get_course_completed_date( $user_id, $enr_value);
+            $course_completed_on = ($course_completed_on > 0 ) ? date('m/d/Y', $course_completed_on) : 0;
+            $course_time_diff = learndash_get_user_course_attempts_time_spent( $user_id, $enr_value );
+            $course_last_step_id = learndash_user_course_last_step( $user_id,  $enr_value );
+            $last_step_title = html_entity_decode(esc_html( get_the_title($course_last_step_id) ));
+
+            // Query for activity type 
+            $activity_qry = "SELECT activity_type FROM wp_learndash_user_activity where user_id = '$user_id' and course_id = '$course_id' and post_id = '$course_last_step_id'";
+            $sql_query    = $wpdb->prepare($activity_qry, 1) ;
+            $rows         = $wpdb->get_results($sql_query, ARRAY_A);
+
+            if(!empty($rows)) {
+              foreach($rows as $Record){
+                $course_last_activity_type = $Record['activity_type'];             
+              }
+            } else {
+              $course_last_activity_type = '';
+            }
+
+            if($course_last_activity_type == 'topic') {
+              $course_last_activity_type = 'lesson';
+            } elseif( $course_last_activity_type == 'lesson' ) {
+              $course_last_activity_type = 'module';
+            } elseif( $course_last_activity_type == 'quiz' ) {
+              $course_last_activity_type = 'exam';
+            } 
+
+            if ( $course_time_diff > 0) {
+
+              if ( $course_time_diff > 86400 ) {
+                if ( !empty( $header_output ) ) $header_output .= ' ';
+                $header_output .= floor($course_time_diff / 86400) .'d';
+                $course_time_diff %= 86400;
+              }
+
+              if ( $course_time_diff > 3600 ) {
+                if ( !empty( $header_output ) ) $header_output .= ' ';
+                $header_output .= floor( $course_time_diff / 3600 ) .'h';
+                $course_time_diff %= 3600;
+              }
+            
+              if ( $course_time_diff > 60 ) {
+                if ( !empty( $header_output ) ) $header_output .= ' ';
+                $header_output .= floor( $course_time_diff / 60 ) .'m';
+                $course_time_diff %= 60;
+              }
+    
+              if ( $course_time_diff > 0 ) {
+                if ( !empty( $header_output ) ) $header_output .= ' ';
+                $header_output .= $course_time_diff .'s';
+              }
+            
+            }
+            
+
+            $far_step[] = learndash_activity_course_get_latest_completed_step( $user_id, $course_id );
+            $course_far_step_id = $far_step[0]['post_id'];
+            $course_farthest_step_title = html_entity_decode(esc_html( get_the_title($course_far_step_id) ));
+            
+            //$course_last_activity_type = $stud_progress['results'][$ctr]->activity_type;
+            //print_r($course_last_activity_type);
+
+            if($stud_progress['results'][$ctr]->post_id == $enr_value ) {
+            $course_started_on = date('m/d/Y', $stud_progress['results'][$ctr]->activity_started);
+            } else {
+              $course_started_on = '';
+            }
+           // echo "<tr><td>$user_id</td><td>$userValue->display_name</td><td>$userValue->user_email</td><td>$enr_value</td><td>$course_title->post_title</td><td>$steps_completed</td><td>$steps_total</td><td>$course_completed</td><td>$course_completed_on</td><td>$course_started_on</td><td> $header_output </td><td>$course_last_step_id</td><td>$course_last_activity_type</td><td>$last_step_title</td><td>$course_farthest_step_title</td><td> $last_login</td></tr>";
+
+          // output records to csv
+          if(!empty($course_id)) {
+          $OutputRecord = array(
+            $user_id,
+            $userValue->display_name,
+            $userValue->user_email,
+            $course_id,
+            $course_title->post_title,
+            $steps_completed,
+            $steps_total,
+            $course_completed,
+            $course_completed_on,
+            $course_started_on,
+            $header_output,
+            $course_last_step_id,
+            $course_last_activity_type,
+            $last_step_title,
+            $course_farthest_step_title,
+            $last_login
+          );
+
+          fputcsv($fp, $OutputRecord); 
+          }
+
+            $ctr++;
+          } // foreach
+        } else {
+
+         
+          $course_id = $enr_courses[0];
+          $header_output = '';
+          $course_title = get_post($course_id);
+          $steps_completed = learndash_course_get_completed_steps( $user_id,  $course_id );
+          $steps_total = learndash_course_get_steps_count( $course_id);
+          $course_completed = learndash_course_status( $course_id, $user_id );
+          $course_completed = ($course_completed == 'Completed' ) ? "YES" : "NO";
+          if( $course_completed  == 'YES') {
+            $steps_completed = $steps_total;
+          }
+          $course_completed_on = learndash_user_get_course_completed_date( $user_id, $course_id);
+          $course_completed_on = ($course_completed_on > 0 ) ? date('m/d/Y', $course_completed_on) : 0;
+          $course_started_on = date('m/d/Y', $stud_progress['results'][$ctr]->activity_started);
+          $course_time_diff = learndash_get_user_course_attempts_time_spent( $user_id, $course_id );
+          $course_last_step_id = learndash_user_course_last_step( $user_id,  $course_id );
+          $last_step_title = html_entity_decode(esc_html( get_the_title($course_last_step_id) ));
+
+          // Query for activity type 
+          $activity_qry = "SELECT activity_type FROM wp_learndash_user_activity where user_id = '$user_id' and course_id = '$course_id' and post_id = '$course_last_step_id'";
+          $sql_query    = $wpdb->prepare($activity_qry, 1) ;
+          $rows         = $wpdb->get_results($sql_query, ARRAY_A);
+
+          foreach($rows as $Record){
+            $course_last_activity_type = $Record['activity_type'];           
+          }
+
+          if($course_last_activity_type == 'topic') {
+            $course_last_activity_type = 'lesson';
+          } elseif( $course_last_activity_type == 'lesson' ) {
+            $course_last_activity_type = 'module';
+          } elseif( $course_last_activity_type == 'quiz' ) {
+            $course_last_activity_type = 'exam';
+          } 
+
+
+          $far_step[] = learndash_activity_course_get_latest_completed_step( $user_id, $course_id );
+          $course_far_step_id = $far_step[0]['post_id'];
+          $course_farthest_step_title = html_entity_decode(esc_html( get_the_title($course_far_step_id) ));
+
+          if ( $course_time_diff > 0) {
+
+            if ( $course_time_diff > 86400 ) {
+              if ( !empty( $header_output ) ) $header_output .= ' ';
+              $header_output .= floor($course_time_diff / 86400) .'d';
+              $course_time_diff %= 86400;
+            }
+
+            if ( $course_time_diff > 3600 ) {
+              if ( !empty( $header_output ) ) $header_output .= ' ';
+              $header_output .= floor( $course_time_diff / 3600 ) .'h';
+              $course_time_diff %= 3600;
+            }
+          
+            if ( $course_time_diff > 60 ) {
+              if ( !empty( $header_output ) ) $header_output .= ' ';
+              $header_output .= floor( $course_time_diff / 60 ) .'m';
+              $course_time_diff %= 60;
+            }
+  
+            if ( $course_time_diff > 0 ) {
+              if ( !empty( $header_output ) ) $header_output .= ' ';
+              $header_output .= $course_time_diff .'s';
+            }
+          
+          }
+          //echo "<tr><td>$user_id</td><td>$userValue->display_name</td><td>$userValue->user_email</td><td>$course_id</td><td>$course_title->post_title</td><td>$steps_completed</td><td>$steps_total</td><td>$course_completed</td><td>$course_completed_on</td><td>$course_started_on</td><td> $header_output </td><td>$course_last_step_id</td><td>$course_last_activity_type</td><td>$last_step_title</td><td>$course_farthest_step_title</td><td>$last_login</td></tr>";
+          if(!empty($course_id)) {
+          $OutputRecord = array(
+            $user_id,
+            $userValue->display_name,
+            $userValue->user_email,
+            $course_id,
+            $course_title->post_title,
+            $steps_completed,
+            $steps_total,
+            $course_completed,
+            $course_completed_on,
+            $course_started_on,
+            $header_output,
+            $course_last_step_id,
+            $course_last_activity_type,
+            $last_step_title,
+            $course_farthest_step_title,
+            $last_login
+          );
+
+          fputcsv($fp, $OutputRecord); 
+          }
+        }
+    }
+   // echo "</table>";
+   $stud_progress = learndash_report_user_courses_progress('387');
+   $started_act = learndash_activity_course_get_earliest_started( '137', '13' );
+   //echo "Started:". date('m/d/Y',$started_act). '<br />';
+
+   
+   //print_r($stud_progress);
+
+   fclose( $fp );
+   exit;
+    
+  } //End if
+
 
 
   // check user capabilities
@@ -241,6 +536,13 @@ function crudAdminPage() {
   $default_tab = null;
   $tab = isset($_GET['tab']) ? $_GET['tab'] : $default_tab;
 
+
+  //$courses = learndash_get_user_groups_courses_ids( '37912' );
+
+  $courses = learndash_get_groups_user_ids( '37912' );
+  
+  //echo "courses enrolled: <br />";
+  //print_r($courses);
 
   ?>
 
@@ -255,7 +557,7 @@ function crudAdminPage() {
     <nav class="nav-tab-wrapper">
       <a href="?page=reliability/reliability.php" class="nav-tab <?php if($tab===null):?>nav-tab-active<?php endif; ?>">Students</a>
       <a href="?page=reliability/reliability.php&tab=assignments" class="nav-tab <?php if($tab==='assignments'):?>nav-tab-active<?php endif; ?>">Assignments</a>
-      <!-- <a href="?page=my-plugin&tab=tools" class="nav-tab <?php if($tab==='tools'):?>nav-tab-active<?php endif; ?>">Tools</a> -->
+      <a href="?page=reliability/reliability.php&tab=quizzes" class="nav-tab <?php if($tab==='quizzes'):?>nav-tab-active<?php endif; ?>">Quizzes</a>    
     </nav>
 
     <div class="tab-content">
@@ -264,11 +566,16 @@ function crudAdminPage() {
          include 'assignments.php'; 
          //Put your HTML here
         break;
+      case 'quizzes':
+         include 'quizzes.php'; 
+         //Put your HTML here
+        break;
       default:
     ?>
     <br />
       <form action="" method="post">
-          <button id="btnexport" name="btnexport" type="submit" class="button">Export Student's Data</button>
+          <!-- <button id="btnexport" name="btnexport" type="submit" class="button">Export Student's Data</button> -->
+          <button id="btnexportnow" name="btnexportnow" type="submit" class="button">Export Now</button>
       </form>
 
       <?php 
@@ -301,13 +608,65 @@ function crudAdminPage() {
   
   <?php
 
+} // end of function 
+
+function learndash_get_all_course_ids() {
+  $query_args = array(
+      'post_type'         =>   'sfwd-courses',
+      'post_status'       =>   'publish',
+      'fields'            =>   'ids',
+      'orderby'           =>   'title',
+      'order'             =>   'ASC',
+      'nopaging'          =>   true    // Turns OFF paging logic to get ALL courses
+  );
+
+  $query = new WP_Query( $query_args );
+  if ( $query instanceof WP_Query) {
+      return $query->posts;
+  }
+}
+
+function exportProgress() {
+
+  
+
 }
 
 
 function list_my_courses() {
+  if(isset($_REQUEST)) {
+    $team_id = $_REQUEST['team_id'];
+    $courses_array = array();
+    //$courses = learndash_user_get_enrolled_courses( $team_id );
+    $courses = learndash_get_group_courses_list( $team_id );
+  
+    //print_r($courses);
+    //$courses = learndash_user_get_enrolled_courses( get_current_user_id());
+
+    foreach($courses as $courses_title) {
+      //$course_name[] = get_post($ld_course_id);
+      $course_name[] = get_post($courses_title);
+  
+     
+      
+       //$modules_array[] = $modules_title->post_name;
+      //echo "<options>$modules_title->post_name</options>";
+    }
+
+    echo "<option>Select Course</option>";
+    foreach($course_name as $course_value) {
+      echo "<option value='$course_value->ID'>$course_value->post_title</option>";
+    }
+   
+
+  }
 
 }
 
+add_action("wp_ajax_list_courses", 'list_my_courses');
+
+
+// Lessons = modules in reliability 
 function list_my_modules() {
   if(isset($_REQUEST)) {
 
@@ -333,6 +692,9 @@ function list_my_modules() {
 
 add_action("wp_ajax_list_modules", 'list_my_modules');
 
+
+
+// topics  = lesson in reliability
 function list_my_lessons() {
   if(isset($_REQUEST)) {
 
