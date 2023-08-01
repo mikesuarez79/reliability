@@ -37,7 +37,18 @@ $sql_query    = $wpdb->prepare($qry, 1) ;
 $rows         = $wpdb->get_results($sql_query, ARRAY_A);
 
 $ctr = 0; 
+
+
+
+
 ?>
+
+
+<form action="" method="post">
+          <!-- <button id="btnexport" name="btnexport" type="submit" class="button">Export Student's Data</button> -->
+          <button id="btnexportxls" name="btnexportxls" type="submit" class="button">Export Now</button>
+</form>
+
 <table class="widefat striped">
 	<thead>
 		<tr>
@@ -69,6 +80,49 @@ $ctr = 0;
 		<td style="width: 10%;"><?php echo $correct[0]['correct_ans']; ?></td>
 		<td style="width: 10%;"><?php echo $incorrect[0]['incorrect_ans']; ?></td>
 	</tr>
+	<?php $myArray[] = $Record; ?>
 <?php endforeach; ?>
 </tbody>
 </table>
+
+
+
+<?php
+
+
+if (isset($_POST['btnexportxls'])) {
+	print_r($myArray);
+
+	/*// Query to get all the quizzes
+	$qry = "SELECT id, quiz_id, `online`, title, question FROM wp_wp_pro_quiz_question where `online` = 1";
+	$sql_query    = $wpdb->prepare($qry, 1) ;
+	$rows         = $wpdb->get_results($sql_query, ARRAY_A);
+
+	$ctr = 0; 
+
+	// File Name & Content Header For Download
+	$file_name = "customers_data.xls";
+	header("Content-Disposition: attachment; filename=\"$file_name\"");
+	header("Content-Type: application/vnd.ms-excel");
+
+
+	//To define column name in first row.
+	$column_names = false;
+
+	// run loop through each row in $customers_data
+
+	foreach ($rows as $row) {
+	    if (!$column_names) {
+	        echo implode("\t", array_keys($row)) . "\n";
+	        $column_names = true;
+	    }
+	    // The array_walk() function runs each array element in a user-defined function.
+	    array_walk($row, 'filterCustomerData');
+	    echo implode("\t", array_values($row)) . "\n";
+	}
+	exit;*/
+	
+}
+
+
+?>
